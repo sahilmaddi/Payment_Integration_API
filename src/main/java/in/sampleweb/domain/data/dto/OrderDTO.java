@@ -1,9 +1,12 @@
 package in.sampleweb.domain.data.dto;
 
+import java.util.List;
+
 import in.sampleweb.domain.data.entity.Address;
 import in.sampleweb.domain.data.entity.Customer;
+import in.sampleweb.domain.data.entity.OrderItem;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
 import lombok.Data;
 
 @Data
@@ -20,4 +23,7 @@ public class OrderDTO {
     
     @ManyToOne
     private Address address;
+    
+    @ElementCollection
+    private List<OrderItem> orderItems; 
 }

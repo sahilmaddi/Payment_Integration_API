@@ -5,22 +5,40 @@ import com.razorpay.RazorpayException;
 import in.sampleweb.domain.data.dto.OrderResponse;
 import in.sampleweb.domain.data.dto.PaymentCallbackDTO;
 import in.sampleweb.domain.data.dto.PurchaseDTO;
+import in.sampleweb.domain.data.entity.Customer;
 import in.sampleweb.domain.data.entity.Order;
+import in.sampleweb.domain.data.entity.OrderItem;
+import in.sampleweb.domain.data.entity.Address;
+import in.sampleweb.domain.data.repository.AddressRepository;
+import in.sampleweb.domain.data.repository.CustomerRepository;
+import in.sampleweb.domain.data.repository.OrderItemRepository;
 import in.sampleweb.domain.data.repository.OrderRepository;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.apache.commons.codec.binary.Hex;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class OrderService {
 
     @Autowired
     private OrderRepository orderRepo;
+
+    @Autowired
+    private CustomerRepository custRepo;
+
+    @Autowired
+    private AddressRepository addressRepo;
+
+    @Autowired
+    private OrderItemRepository orderItemRepo;
 
     private RazorpayClient client;
 
@@ -31,7 +49,6 @@ public class OrderService {
     private String keySecret;
 
     public OrderResponse createOrder(PurchaseDTO purchaseDto) throws Exception {
-
         // Create a Razorpay order
         JSONObject orderRequest = new JSONObject();
         orderRequest.put("amount", purchaseDto.getOrder().getTotalprice() * 100);  // amount in paise
@@ -42,13 +59,37 @@ public class OrderService {
         this.client = new RazorpayClient(keyId, keySecret);
         com.razorpay.Order razorPayOrder = client.Orders.create(orderRequest);
 
-        // Save the order to the database
+        // Save customer information
+        Customer customer = new Customer();
+        customer.setName(purchaseDto.getCustomer().getName());
+        customer.setEmail(purchaseDto.getCustomer().getEmail());
+        customer.setPhno(purchaseDto.getCustomer().getPhno()); // Assuming there's a phone number field
+        custRepo.save(customer);
+
+        // Save address information
+        Address address = new Address();
+        address.setCustomer(customer); // Link address to the customer
+        address.setStreet(purchaseDto.getAddress().getStreet());
+        address.setCity(purchaseDto.getAddress().getCity());
+        address.setState(purchaseDto.getAddress().getState());
+        address.setZipCode(purchaseDto.getAddress().getZipCode());
+        addressRepo.save(address);
+
+        // Save order information
         Order newOrder = new Order();
         newOrder.setRazorPayOrderId(razorPayOrder.get("id"));
         newOrder.setOrderStatus(razorPayOrder.get("status"));
         newOrder.setTotalPrice(purchaseDto.getOrder().getTotalprice());
-        newOrder.setEmail(purchaseDto.getCustomer().getEmail());
+        newOrder.setEmail(customer.getEmail());
+        newOrder.setAddress(address); // Link order to the address
         orderRepo.save(newOrder);
+
+        // Save order items
+        List<OrderItem> orderItems = purchaseDto.getOrder().getOrderItems(); // Assuming this returns a list of items
+        for (OrderItem item : orderItems) {
+            item.setOrder(newOrder); // Link each item to the order
+            orderItemRepo.save(item);
+        }
 
         // Create and return the OrderResponse
         OrderResponse orderResponse = new OrderResponse();
@@ -83,19 +124,19 @@ public class OrderService {
 
     private boolean verifySignature(PaymentCallbackDTO paymentCallbackDTO) throws RazorpayException {
         String generatedSignature = HmacSHA256(
-            paymentCallbackDTO.getRazorpayOrderId() + "|" + paymentCallbackDTO.getRazorpayPaymentId(),
-            keySecret
+                paymentCallbackDTO.getRazorpayOrderId() + "|" + paymentCallbackDTO.getRazorpayPaymentId(),
+                keySecret
         );
         return generatedSignature.equals(paymentCallbackDTO.getRazorpaySignature());
     }
 
     private String HmacSHA256(String data, String key) throws RazorpayException {
         try {
-            Mac mac =Mac.getInstance("HmacSHA256");
+            Mac mac = Mac.getInstance("HmacSHA256");
             SecretKeySpec secretKeySpec = new SecretKeySpec(key.getBytes(), "HmacSHA256");
             mac.init(secretKeySpec);
             byte[] hash = mac.doFinal(data.getBytes());
-            return new String(org.apache.commons.codec.binary.Hex.encodeHex(hash));
+            return new String(Hex.encodeHex(hash));
         } catch (Exception e) {
             throw new RazorpayException("Failed to calculate signature.", e);
         }

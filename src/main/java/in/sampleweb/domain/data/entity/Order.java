@@ -1,6 +1,9 @@
 package in.sampleweb.domain.data.entity;
 
+import java.util.List;
+
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -53,4 +56,7 @@ public class Order {
     @ManyToOne
     @JoinColumn(name = "address_id")
     private Address address;
+    
+    @ElementCollection
+    private List<OrderItem> orderItems; 
 }
