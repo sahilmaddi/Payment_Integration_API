@@ -13,10 +13,12 @@ public class Address {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    private String houseno;
     private String street;
     private String city;
     private String state;
     private String zipCode;
+    private String country;
     @ManyToOne
     private Customer customer;
     // getters and setters

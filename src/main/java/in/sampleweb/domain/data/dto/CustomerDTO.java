@@ -8,6 +8,7 @@ public class CustomerDTO {
     private String name;
     private String email;
     private String phno;
+    private String password;
 
 
 }

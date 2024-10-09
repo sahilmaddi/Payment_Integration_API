@@ -1,18 +1,10 @@
 package in.sampleweb.domain.data.service;
 
-import com.razorpay.RazorpayClient;
-import com.razorpay.RazorpayException;
-import in.sampleweb.domain.data.dto.OrderResponse;
-import in.sampleweb.domain.data.dto.PaymentCallbackDTO;
-import in.sampleweb.domain.data.dto.PurchaseDTO;
-import in.sampleweb.domain.data.entity.Customer;
-import in.sampleweb.domain.data.entity.Order;
-import in.sampleweb.domain.data.entity.OrderItem;
-import in.sampleweb.domain.data.entity.Address;
-import in.sampleweb.domain.data.repository.AddressRepository;
-import in.sampleweb.domain.data.repository.CustomerRepository;
-import in.sampleweb.domain.data.repository.OrderItemRepository;
-import in.sampleweb.domain.data.repository.OrderRepository;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.UUID;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -23,7 +15,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import com.razorpay.RazorpayClient;
+import com.razorpay.RazorpayException;
+
+import in.sampleweb.domain.data.dto.OrderItemDTO;
+import in.sampleweb.domain.data.dto.OrderResponse;
+import in.sampleweb.domain.data.dto.PaymentCallbackDTO;
+import in.sampleweb.domain.data.dto.PurchaseDTO;
+import in.sampleweb.domain.data.entity.Address;
+import in.sampleweb.domain.data.entity.Customer;
+import in.sampleweb.domain.data.entity.Order;
+import in.sampleweb.domain.data.entity.OrderItem;
+import in.sampleweb.domain.data.repository.AddressRepository;
+import in.sampleweb.domain.data.repository.CustomerRepository;
+import in.sampleweb.domain.data.repository.OrderItemRepository;
+import in.sampleweb.domain.data.repository.OrderRepository;
 
 @Service
 public class OrderService {
@@ -47,98 +53,122 @@ public class OrderService {
 
     @Value("${razorpay.key.secret}")
     private String keySecret;
+    
+    
+    public String generateOrderTrackingId() {
+        // Get the current timestamp
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
+        String timestamp = sdf.format(new Date());
+
+        // Generate a random UUID for uniqueness
+        String randomUUID = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+
+        // Combine timestamp and UUID to form the tracking ID
+        String trackingId = "ORDER-" + timestamp + "-" + randomUUID;
+
+        return trackingId;
+    }
 
     public OrderResponse createOrder(PurchaseDTO purchaseDto) throws Exception {
-        // Create a Razorpay order
-        JSONObject orderRequest = new JSONObject();
-        orderRequest.put("amount", purchaseDto.getOrder().getTotalprice() * 100);  // amount in paise
-        orderRequest.put("currency", "INR");
-        orderRequest.put("receipt", purchaseDto.getCustomer().getEmail());
+	// Create a Razorpay order
+	JSONObject orderRequest = new JSONObject();
+	orderRequest.put("amount", (int) purchaseDto.getOrder().getTotalprice() * 100); // amount in paise
+	orderRequest.put("currency", "INR");
+	orderRequest.put("receipt", purchaseDto.getCustomer().getEmail());
 
-        // Initialize Razorpay client
-        this.client = new RazorpayClient(keyId, keySecret);
-        com.razorpay.Order razorPayOrder = client.Orders.create(orderRequest);
+	
+	 String orderTrackingNumber = generateOrderTrackingId();
+	// Initialize Razorpay client
+	this.client = new RazorpayClient(keyId, keySecret);
+	com.razorpay.Order razorPayOrder = client.Orders.create(orderRequest);
 
-        // Save customer information
-        Customer customer = new Customer();
-        customer.setName(purchaseDto.getCustomer().getName());
-        customer.setEmail(purchaseDto.getCustomer().getEmail());
-        customer.setPhno(purchaseDto.getCustomer().getPhno()); // Assuming there's a phone number field
-        custRepo.save(customer);
+	// Save customer information
+	Customer customer = new Customer();
+	customer.setName(purchaseDto.getCustomer().getName());
+	customer.setEmail(purchaseDto.getCustomer().getEmail());
+	customer.setPassword(purchaseDto.getCustomer().getPassword());
+	customer.setPhno(purchaseDto.getCustomer().getPhno()); // Assuming there's a phone number field
+	custRepo.save(customer);
 
-        // Save address information
-        Address address = new Address();
-        address.setCustomer(customer); // Link address to the customer
-        address.setStreet(purchaseDto.getAddress().getStreet());
-        address.setCity(purchaseDto.getAddress().getCity());
-        address.setState(purchaseDto.getAddress().getState());
-        address.setZipCode(purchaseDto.getAddress().getZipCode());
-        addressRepo.save(address);
+	// Save address information
+	Address address = new Address();
+	address.setCustomer(customer); // Link address to the customer
+	address.setHouseno(purchaseDto.getAddress().getHouseno());
+	address.setStreet(purchaseDto.getAddress().getStreet());
+	address.setCity(purchaseDto.getAddress().getCity());
+	address.setState(purchaseDto.getAddress().getState());
+	address.setZipCode(purchaseDto.getAddress().getZipCode());
+	address.setCountry(purchaseDto.getAddress().getCountry());
+	addressRepo.save(address);
 
-        // Save order information
-        Order newOrder = new Order();
-        newOrder.setRazorPayOrderId(razorPayOrder.get("id"));
-        newOrder.setOrderStatus(razorPayOrder.get("status"));
-        newOrder.setTotalPrice(purchaseDto.getOrder().getTotalprice());
-        newOrder.setEmail(customer.getEmail());
-        newOrder.setAddress(address); // Link order to the address
-        orderRepo.save(newOrder);
+	// Save order information
+	Order newOrder = new Order();
+	newOrder.setRazorPayOrderId(razorPayOrder.get("id"));
+	newOrder.setOrderStatus(razorPayOrder.get("status"));
+	newOrder.setTotalPrice(purchaseDto.getOrder().getTotalprice());
+	newOrder.setCustomer(customer);
+	newOrder.setEmail(customer.getEmail());
+	newOrder.setAddress(address);
+	newOrder.setOrderTrackingNumber(orderTrackingNumber);
+	//orderRepo.save(newOrder);
 
-        // Save order items
-        List<OrderItem> orderItems = purchaseDto.getOrder().getOrderItems(); // Assuming this returns a list of items
-        for (OrderItem item : orderItems) {
-            item.setOrder(newOrder); // Link each item to the order
-            orderItemRepo.save(item);
-        }
+	// Save order items
+	 List<OrderItem> orderItems = new ArrayList<>();
+	    for (OrderItemDTO itemDto : purchaseDto.getOrderItems()) {
+	        OrderItem orderItem = new OrderItem();
+	        orderItem.setProductName(itemDto.getProductName());
+	        orderItem.setQuantity(itemDto.getQuantity());
+	        orderItem.setOrder(newOrder);
+	        orderItems.add(orderItem);
+	    }
+	    newOrder.setOrderItems(orderItems);
+	orderRepo.save(newOrder);
+	// Create and return the OrderResponse
+	OrderResponse orderResponse = new OrderResponse();
+	orderResponse.setRazorpayOrderId(razorPayOrder.get("id"));
+	orderResponse.setOrderStatus(razorPayOrder.get("status"));
 
-        // Create and return the OrderResponse
-        OrderResponse orderResponse = new OrderResponse();
-        orderResponse.setRazorpayOrderId(razorPayOrder.get("id"));
-        orderResponse.setOrderStatus(razorPayOrder.get("status"));
-
-        return orderResponse;
+	return orderResponse;
     }
 
     public Order verifyPaymentAndUpdateOrderStatus(PaymentCallbackDTO paymentCallbackDTO) {
-        Order order = orderRepo.findByRazorPayOrderId(paymentCallbackDTO.getRazorpayOrderId());
-        if (order != null) {
-            try {
-                // Verify the payment signature
-                boolean isValid = verifySignature(paymentCallbackDTO);
+	Order order = orderRepo.findByRazorPayOrderId(paymentCallbackDTO.getRazorpayOrderId());
+	if (order != null) {
+	    try {
+		// Verify the payment signature
+		boolean isValid = verifySignature(paymentCallbackDTO);
 
-                if (isValid) {
-                    // Update order status and save the order
-                    order.setOrderStatus("PAID");
-                    order.setRazorPayPaymentId(paymentCallbackDTO.getRazorpayPaymentId());
-                    orderRepo.save(order);  // Save updated order to the database
-                    return order;
-                } else {
-                    System.out.println("Invalid payment signature.");
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        return null;
+		if (isValid) {
+		    // Update order status and save the order
+		    order.setOrderStatus("PAID");
+		    order.setRazorPayPaymentId(paymentCallbackDTO.getRazorpayPaymentId());
+		    orderRepo.save(order); // Save updated order to the database
+		    return order;
+		} else {
+		    System.out.println("Invalid payment signature.");
+		}
+	    } catch (Exception e) {
+		e.printStackTrace();
+	    }
+	}
+	return null;
     }
 
     private boolean verifySignature(PaymentCallbackDTO paymentCallbackDTO) throws RazorpayException {
-        String generatedSignature = HmacSHA256(
-                paymentCallbackDTO.getRazorpayOrderId() + "|" + paymentCallbackDTO.getRazorpayPaymentId(),
-                keySecret
-        );
-        return generatedSignature.equals(paymentCallbackDTO.getRazorpaySignature());
+	String generatedSignature = HmacSHA256(
+		paymentCallbackDTO.getRazorpayOrderId() + "|" + paymentCallbackDTO.getRazorpayPaymentId(), keySecret);
+	return generatedSignature.equals(paymentCallbackDTO.getRazorpaySignature());
     }
 
     private String HmacSHA256(String data, String key) throws RazorpayException {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            SecretKeySpec secretKeySpec = new SecretKeySpec(key.getBytes(), "HmacSHA256");
-            mac.init(secretKeySpec);
-            byte[] hash = mac.doFinal(data.getBytes());
-            return new String(Hex.encodeHex(hash));
-        } catch (Exception e) {
-            throw new RazorpayException("Failed to calculate signature.", e);
-        }
+	try {
+	    Mac mac = Mac.getInstance("HmacSHA256");
+	    SecretKeySpec secretKeySpec = new SecretKeySpec(key.getBytes(), "HmacSHA256");
+	    mac.init(secretKeySpec);
+	    byte[] hash = mac.doFinal(data.getBytes());
+	    return new String(Hex.encodeHex(hash));
+	} catch (Exception e) {
+	    throw new RazorpayException("Failed to calculate signature.", e);
+	}
     }
 }

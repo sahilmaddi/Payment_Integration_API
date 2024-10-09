@@ -1,5 +1,11 @@
 package in.sampleweb.domain.data.entity;
 
+import java.util.Date;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -17,5 +23,13 @@ public class Customer {
     private String email;
     private String password;
     private String phno;
+    
+    @CreationTimestamp
+    @Column(name="date_created")
+    private Date dateCreated;
+    
+    @UpdateTimestamp
+    @Column(name="last_updated")
+    private Date lastUpdated;  
 
 }
