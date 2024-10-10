@@ -10,6 +10,8 @@ import in.sampleweb.domain.data.entity.Customer;
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     Customer save(CustomerDTO customer);
+
+    Customer findByEmail(String email);
    
 }
 
