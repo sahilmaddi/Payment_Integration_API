@@ -67,6 +67,9 @@ public class OrderService {
 
         return trackingId;
     }
+    public List<Order> getOrdersByEmail(String email) {
+        return orderRepo.findByEmail(email);
+    }
     
    
 

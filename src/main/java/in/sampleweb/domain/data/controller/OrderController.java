@@ -1,10 +1,14 @@
 package in.sampleweb.domain.data.controller;
 
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,6 +26,15 @@ import in.sampleweb.domain.data.service.OrderService;
 public class OrderController {
     @Autowired
     private OrderService orderService;
+    
+    @GetMapping("/byEmail/{email}")
+    public ResponseEntity<List<Order>> getOrdersByEmail(@PathVariable("email") String email) {
+        List<Order> orders = orderService.getOrdersByEmail(email);
+        if (orders.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(orders);
+    }
 
     @PostMapping(value = "/create-order", produces = "application/json", consumes = "application/json")
     @ResponseBody
